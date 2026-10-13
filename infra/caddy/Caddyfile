@@ -1,0 +1,8 @@
+{
+	local_certs
+}
+
+{$PATHLY_DOMAIN:pathly.localhost} {
+	encode zstd gzip
+	reverse_proxy api:8000
+}

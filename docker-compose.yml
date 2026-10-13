@@ -1,0 +1,127 @@
+name: pathly
+
+x-postgres-env: &postgres-env
+  POSTGRES_USER: ${POSTGRES_USER:-pathly}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pathly}
+  POSTGRES_DB: ${POSTGRES_DB:-pathly}
+  REPLICATION_USER: ${REPLICATION_USER:-replicator}
+  REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:-replicator}
+
+services:
+  postgres-primary:
+    image: postgres:17-alpine
+    environment:
+      <<: *postgres-env
+    command:
+      - postgres
+      - -c
+      - wal_level=replica
+      - -c
+      - max_wal_senders=10
+      - -c
+      - max_replication_slots=10
+      - -c
+      - wal_keep_size=256MB
+      - -c
+      - hot_standby=on
+    volumes:
+      - primary-data:/var/lib/postgresql/data
+      - ./infra/postgres/primary:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  postgres-replica-1:
+    image: postgres:17-alpine
+    user: postgres
+    environment:
+      <<: *postgres-env
+      PRIMARY_HOST: postgres-primary
+      REPLICATION_SLOT: replica_1
+    entrypoint: ["/bin/sh", "/replica/entrypoint.sh"]
+    volumes:
+      - replica-1-data:/var/lib/postgresql/data
+      - ./infra/postgres/replica:/replica:ro
+    ports:
+      - "5433:5432"
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  api:
+    build: ./app
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      PRIMARY_DSN: postgresql+asyncpg://${POSTGRES_USER:-pathly}:${POSTGRES_PASSWORD:-pathly}@postgres-primary:5432/${POSTGRES_DB:-pathly}
+      REPLICA_DSNS: postgresql+asyncpg://${POSTGRES_USER:-pathly}:${POSTGRES_PASSWORD:-pathly}@postgres-replica-1:5432/${POSTGRES_DB:-pathly}
+      REDIS_URL: redis://redis:6379/0
+      DUCKDB_PATH: /data/analytics.duckdb
+    volumes:
+      - analytics-data:/data
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+      postgres-replica-1:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  caddy:
+    image: caddy:2.10-alpine
+    profiles: ["https"]
+    environment:
+      PATHLY_DOMAIN: ${PATHLY_DOMAIN:-pathly.localhost}
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    depends_on:
+      - api
+
+  simulator:
+    build: ./app
+    profiles: ["sim"]
+    env_file:
+      - path: .env
+        required: false
+    command: ["python", "-m", "pathly.tools.simulate", "--base-url", "http://api:8000"]
+    depends_on:
+      - api
+
+volumes:
+  primary-data:
+  replica-1-data:
+  redis-data:
+  analytics-data:
+  caddy-data:
+  caddy-config:

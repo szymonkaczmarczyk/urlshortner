@@ -1,0 +1,8 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+*.duckdb
+*.duckdb.wal
+.pytest_cache/
+pathly-root.crt

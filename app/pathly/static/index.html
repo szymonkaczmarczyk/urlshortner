@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pathly</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js" defer></script>
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-name">Pathly</span>
+      <span class="brand-sub">read/write routing · event streaming · OLAP</span>
+    </div>
+    <div class="session" id="session" hidden>
+      <span id="session-email"></span>
+      <button class="ghost" id="logout">Wyloguj</button>
+    </div>
+  </header>
+
+  <main id="auth-view" class="auth" hidden>
+    <form class="card auth-card" id="auth-form">
+      <h1>Zaloguj się</h1>
+      <p class="muted">Logowanie i rejestracja idą zawsze do <code>pool_primary</code>.</p>
+      <label>Email<input type="email" name="email" autocomplete="username" required></label>
+      <label>Hasło<input type="password" name="password" minlength="8" autocomplete="current-password" required></label>
+      <div class="row">
+        <button type="submit" data-mode="login">Zaloguj</button>
+        <button type="submit" class="secondary" data-mode="register">Załóż konto</button>
+      </div>
+      <p class="error" id="auth-error" role="alert"></p>
+    </form>
+  </main>
+
+  <main id="app-view" class="app" hidden>
+    <section class="card create">
+      <form id="create-form" class="create-form">
+        <label class="grow">Docelowy URL<input name="target_url" type="url" placeholder="https://..." required></label>
+        <label>Alias (opcjonalnie)<input name="alias" pattern="[A-Za-z0-9_\-]{3,32}" placeholder="np. launch"></label>
+        <button type="submit">Skróć</button>
+      </form>
+      <p class="create-result" id="create-result" aria-live="polite"></p>
+    </section>
+
+    <section class="filters" aria-label="Filtry analityki">
+      <label class="select">
+        <span>Link</span>
+        <select id="link-filter"><option value="">Wszystkie linki</option></select>
+      </label>
+      <div class="segmented" id="window-filter" role="radiogroup" aria-label="Okno czasowe">
+        <button role="radio" data-window="15m">15 min</button>
+        <button role="radio" data-window="1h" aria-checked="true">1 h</button>
+        <button role="radio" data-window="24h">24 h</button>
+        <button role="radio" data-window="7d">7 dni</button>
+        <button role="radio" data-window="30d">30 dni</button>
+      </div>
+      <span class="live" id="live-indicator"><span class="dot"></span><span id="live-label">łączenie…</span></span>
+    </section>
+
+    <section class="tiles" id="tiles">
+      <article class="tile"><h3>Kliknięcia</h3><p class="value" id="tile-clicks">–</p><p class="delta" id="tile-delta"></p></article>
+      <article class="tile"><h3>Unikalni odwiedzający</h3><p class="value" id="tile-visitors">–</p><p class="hint">hash(IP + UA), bez surowego IP</p></article>
+      <article class="tile"><h3>Ostatnia minuta</h3><p class="value" id="tile-minute">–</p><p class="hint">kliknięć w ciągu 60 s</p></article>
+      <article class="tile"><h3>Odfiltrowane boty</h3><p class="value" id="tile-bots">–</p><p class="hint">nie wliczane do wykresów</p></article>
+    </section>
+
+    <section class="card chart-card" id="series-card">
+      <div class="card-head">
+        <h2>Kliknięcia w czasie</h2>
+        <div class="legend" aria-hidden="true">
+          <span><i class="key key-1"></i>Kliknięcia</span>
+          <span><i class="key key-2"></i>Unikalni</span>
+        </div>
+      </div>
+      <div class="chart-wrap"><canvas id="series-chart" aria-label="Wykres kliknięć w czasie" role="img"></canvas></div>
+      <details class="table-view">
+        <summary>Pokaż dane w tabeli</summary>
+        <table><thead><tr><th>Przedział</th><th>Kliknięcia</th><th>Unikalni</th></tr></thead><tbody id="series-table"></tbody></table>
+      </details>
+    </section>
+
+    <section class="breakdowns">
+      <article class="card"><h2>Źródła (referrer)</h2><ol class="bars" id="bars-referrers"></ol></article>
+      <article class="card"><h2>Urządzenia</h2><ol class="bars" id="bars-devices"></ol></article>
+      <article class="card"><h2>Przeglądarki</h2><ol class="bars" id="bars-browsers"></ol></article>
+      <article class="card"><h2>Kraje</h2><ol class="bars" id="bars-countries"></ol></article>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Twoje linki</h2><span class="muted" id="links-count"></span></div>
+      <div class="table-scroll">
+        <table class="links">
+          <thead><tr><th>Skrót</th><th>Cel</th><th class="num">Kliknięcia</th><th>Status</th><th></th></tr></thead>
+          <tbody id="links-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="system">
+      <article class="card">
+        <div class="card-head"><h2>Pule i komponenty</h2><span class="muted">odświeżane co 2 s</span></div>
+        <div class="pools" id="pools"></div>
+      </article>
+      <article class="card">
+        <div class="card-head"><h2>Trace Smart Routera</h2><span class="muted">nagłówki X-DB-Route / X-DB-Pools</span></div>
+        <ol class="trace" id="trace"></ol>
+      </article>
+    </section>
+  </main>
+
+  <div class="tooltip" id="tooltip" role="tooltip" hidden></div>
+</body>
+</html>

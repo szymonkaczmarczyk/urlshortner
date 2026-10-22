@@ -1,5 +1,7 @@
 # Pathly
 
+**Polski** · [English](README.en.md)
+
 Skracacz linków zbudowany jako **poligon do nauki architektury produkcyjnej**: rozdzielenie zapisów i odczytów (primary / read replica), cache w pamięci, asynchroniczny strumień zdarzeń i osobna baza analityczna OLAP z dashboardem na żywo.
 
 ```mermaid
@@ -177,3 +179,7 @@ app/pathly/
   static/                        dashboard (Chart.js + SSE przez fetch stream)
   tools/simulate.py              generator ruchu
 ```
+
+## Licencja
+
+[MIT](LICENSE) © 2026 Szymon Kaczmarczyk
